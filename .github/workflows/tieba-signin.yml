@@ -2,7 +2,7 @@ name: 百度贴吧自动签到
 
 on:
   schedule:
-    - cron: '0 16,17 * * *'  # 每天 UTC 16:00 17:00 运行 (北京时间 00:00 01:00)
+    - cron: '0 17,18 * * *'  # 每天 UTC 17:00 18:00 运行 (北京时间 01:00 02:00，分两批避免限流)
   workflow_dispatch:     # 支持手动触发
 
 jobs:
@@ -30,7 +30,7 @@ jobs:
           # 基础配置
           BDUSS: ${{ secrets.BDUSS }}
           BATCH_SIZE: ${{ secrets.BATCH_SIZE || '10' }}
-          BATCH_INTERVAL: ${{ secrets.BATCH_INTERVAL || '3000' }}
+          BATCH_INTERVAL: ${{ secrets.BATCH_INTERVAL || '8000' }}
           
           # 重试配置
           MAX_RETRIES: ${{ secrets.MAX_RETRIES || '5' }}
