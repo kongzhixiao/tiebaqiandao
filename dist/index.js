@@ -56,8 +56,8 @@ const notify_1 = require("./notify");
         }
         // 3. 执行签到过程
         console.log('▶️ 步骤3: 开始签到过程...');
-        // 获取TBS
-        const tbs = yield (0, apiService_1.getTbs)(bduss);
+        // 获取TBS (改为let以便后续刷新)
+        let tbs = yield (0, apiService_1.getTbs)(bduss);
         // 配置批量签到的大小和间隔
         const batchSize = parseInt(process.env.BATCH_SIZE || '20', 10);
         const batchInterval = parseInt(process.env.BATCH_INTERVAL || '1000', 10);
@@ -159,6 +159,15 @@ const notify_1 = require("./notify");
                         break; // 如果没有失败的贴吧了，就退出重试循环
                     console.log(`🔄 第${retryCount}/${maxRetries}次重试: 检测到 ${failedTiebas.length} 个贴吧签到失败，等待 ${retryInterval / 1000} 秒后重试...`);
                     yield new Promise(resolve => setTimeout(resolve, retryInterval));
+                    // 重试前刷新TBS令牌，避免token过期导致重试失败
+                    let retryTbs = tbs;
+                    try {
+                        retryTbs = yield (0, apiService_1.getTbs)(bduss);
+                        console.log('🔄 已刷新TBS令牌');
+                    }
+                    catch (e) {
+                        console.warn('⚠️ 刷新TBS失败，使用原有TBS继续');
+                    }
                     console.log(`🔄 开始第${retryCount}次重试签到失败的贴吧...`);
                     const retryPromises = [];
                     const stillFailedTiebas = []; // 保存本次重试后仍然失败的贴吧
@@ -168,7 +177,7 @@ const notify_1 = require("./notify");
                         const retryPromise = (() => __awaiter(void 0, void 0, void 0, function* () {
                             try {
                                 console.log(`🔄 第${retryCount}次重试签到: ${(0, utils_1.maskTiebaName)(tiebaName)}`);
-                                const result = yield (0, apiService_1.signTieba)(bduss, tiebaName, tbs, tiebaIndex);
+                                const result = yield (0, apiService_1.signTieba)(bduss, tiebaName, retryTbs, tiebaIndex);
                                 const processedResult = (0, dataProcessor_1.processSignResult)(result);
                                 // 更新计数和结果
                                 if (processedResult.success) {
@@ -236,6 +245,14 @@ const notify_1 = require("./notify");
             }
             // 在批次之间添加延迟，除非是最后一批
             if (i + batchSize < tiebaList.length) {
+                // 跨批次前刷新TBS令牌，避免下一批因token过期全部失败
+                try {
+                    tbs = yield (0, apiService_1.getTbs)(bduss);
+                    console.log('🔄 批次间刷新TBS令牌');
+                }
+                catch (e) {
+                    console.warn('⚠️ 批次间刷新TBS失败，使用原有TBS继续');
+                }
                 console.log(`⏳ 等待 ${batchInterval / 1000} 秒后处理下一批...`);
                 yield new Promise(resolve => setTimeout(resolve, batchInterval));
             }
@@ -277,7 +294,9 @@ const notify_1 = require("./notify");
         if (shouldNotify) {
             try {
                 console.log('▶️ 步骤5: 发送通知 (由于BDUSS失效或严重错误触发)');
-                yield (0, notify_1.sendNotification)(`❌ 签到脚本执行失败!\n\n错误信息: ${error.message}`);
+                yield (0, notify_1.sendNotification)(`❌ 签到脚本执行失败!
+
+错误信息: ${error.message}`);
             }
             catch (e) {
                 console.error(`❌ 发送错误通知失败: ${e.message}`);
